@@ -10,6 +10,34 @@ from threading import Thread
 
 from find_sps_pps import find_sps_pps
 
+app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+cors = CORS(app)
+room_device_dict = dict()
+logging.basicConfig(format='%(asctime)s.%(msecs)s:%(name)s:%(thread)d:%(levelname)s:%(process)d:%(message)s',
+                    level=logging.INFO)
+h264_sps_nal = bytes()
+h264_pps_nal = bytes()
+
+
+@app.route('/')
+def index():  # put application's code here
+    return render_template('index.html')
+
+
+@socketio.on('connect')
+def handle_connect():
+    sid = request.sid
+    if len(h264_sps_nal) > 0:
+        [socketio.emit("video_nal", key_nal) for key_nal in [h264_sps_nal, h264_pps_nal]]
+    print(f'Client connected {sid}')
+
+
+@socketio.on('message')
+def handle_stream_in(message):
+    print(f'handle_stream_in len {len(message)}')
+
+
 async def stream_client():
     global h264_sps_nal, h264_pps_nal
     host = "127.0.0.1"
@@ -56,3 +84,6 @@ def start_stream_client():
 
 
 start_stream_client()
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
