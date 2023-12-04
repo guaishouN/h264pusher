@@ -7,12 +7,38 @@ from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS, cross_origin
 import asyncio
 from threading import Thread
+
 from find_sps_pps import find_sps_pps
+
+app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+cors = CORS(app)
+room_device_dict = dict()
+logging.basicConfig(format='%(asctime)s.%(msecs)s:%(name)s:%(thread)d:%(levelname)s:%(process)d:%(message)s',
+                    level=logging.INFO)
 h264_sps_nal = bytes()
 h264_pps_nal = bytes()
 
 
-async def stream_client(to_play_writer: StreamWriter):
+@app.route('/')
+def index():  # put application's code here
+    return render_template('index.html')
+
+
+@socketio.on('connect')
+def handle_connect():
+    sid = request.sid
+    if len(h264_sps_nal) > 0:
+        [socketio.emit("video_nal", key_nal) for key_nal in [h264_sps_nal, h264_pps_nal]]
+    print(f'Client connected {sid}')
+
+
+@socketio.on('message')
+def handle_stream_in(message):
+    print(f'handle_stream_in len {len(message)}')
+
+
+async def stream_client():
     global h264_sps_nal, h264_pps_nal
     host = "127.0.0.1"
     port = 8888
@@ -20,7 +46,7 @@ async def stream_client(to_play_writer: StreamWriter):
     connect_count = 0
     while True:
         try:
-            get_from_reader, get_from_writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
             break
         except (Exception, asyncio.TimeoutError):
             connect_count = connect_count + 1
@@ -29,47 +55,35 @@ async def stream_client(to_play_writer: StreamWriter):
     try:
         total_size = 0
         while True:
-            data = await get_from_reader.read(1024)
+            data = await reader.read(1024)
             total_size = total_size + len(data)
             print(f'\rstream_client Received size: {total_size!r}', end='', flush=True)
             if data and len(h264_sps_nal) == 0:
                 h264_sps_nal, h264_pps_nal, _ = find_sps_pps(data)
                 print(h264_sps_nal, h264_pps_nal)
             if len(data) > 0:
-                to_play_writer.write(data)
-                await to_play_writer.drain()
+                socketio.emit("video_nal", data)
             else:
                 await asyncio.sleep(1)
     except Exception as e:
         print(f"stream_client {e}")
     finally:
-        get_from_writer.close()
-        await get_from_writer.wait_closed()
+        writer.close()
+        await writer.wait_closed()
 
 
-async def stream_dispatch_server():
-    async def handle_stream(to_play_reader: StreamReader, to_play_writer: StreamWriter):
-        await stream_client(to_play_writer)
-
-    server = await asyncio.start_server(handle_stream, '127.0.0.1', 8989)
-    server_addr = ', '.join(str(sock.getsockname()) for sock in server.sockets)
-    print(f'Serving on {server_addr}')
-
-    async with server:
-        await server.serve_forever()
-    print(f'finish Serving on {server_addr}')
-
-
-def start_stream():
+def start_stream_client():
     def run():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(stream_dispatch_server())
+        loop.run_until_complete(stream_client())
         pass
 
-    worker = Thread(target=run, name=f"stream_server")
+    worker = Thread(target=run, name=f"stream_client")
     worker.start()
-    worker.join()
 
 
-start_stream()
+start_stream_client()
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
