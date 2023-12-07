@@ -1,5 +1,6 @@
 import json
 import logging
+import struct
 from asyncio import StreamReader, StreamWriter
 
 from flask import Flask, render_template, request, send_file
@@ -7,7 +8,6 @@ from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS, cross_origin
 import asyncio
 from threading import Thread
-
 from find_sps_pps import find_sps_pps
 
 app = Flask(__name__)
@@ -41,8 +41,8 @@ def handle_stream_in(message):
 async def stream_client():
     global h264_sps_nal, h264_pps_nal
     host = "127.0.0.1"
-    port = 8888
-    timeout = 20
+    port = 10031
+    timeout = 10
     connect_count = 0
     while True:
         try:
@@ -55,21 +55,34 @@ async def stream_client():
     try:
         total_size = 0
         while True:
-            data = await reader.read(1024)
+            frame_meta = await reader.readexactly(12)
+            print(f'frame_meta={frame_meta.hex()}')
+            if len(frame_meta) == 12:
+                data_len = struct.unpack('>L', frame_meta[8:])[0]
+            else:
+                continue
+
+            data = await reader.readexactly(data_len)
             total_size = total_size + len(data)
-            print(f'\rstream_client Received size: {total_size!r}', end='', flush=True)
+            print(f'\rstream_client data_len=[{data_len}], Received size: {total_size!r}', end='', flush=True)
+
             if data and len(h264_sps_nal) == 0:
                 h264_sps_nal, h264_pps_nal, _ = find_sps_pps(data)
                 print(h264_sps_nal, h264_pps_nal)
+                socketio.emit("video_nal", h264_sps_nal)
+                socketio.emit("video_nal", h264_pps_nal)
+                continue
+
             if len(data) > 0:
                 socketio.emit("video_nal", data)
             else:
                 await asyncio.sleep(1)
     except Exception as e:
-        print(f"stream_client {e}")
+        print(f"stream_client error!!!!!!!!!!!!!!! {e}")
     finally:
         writer.close()
         await writer.wait_closed()
+        await stream_client()
 
 
 def start_stream_client():

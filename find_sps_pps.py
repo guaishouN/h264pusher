@@ -46,8 +46,7 @@ def find_sps_pps(raw_stream):
     more_nal_data = bytes()
     if more_nal_pos:
         more_nal_data = bitstream[more_nal_pos[0]:].bytes
-
-    print("more NAL data:", more_nal_data.hex())
+        print("more NAL data:", more_nal_data.hex())
 
     return sps_nal_data, pps_nal_data, more_nal_data
 

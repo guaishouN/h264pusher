@@ -1,6 +1,6 @@
 const socketHostname = window.location.hostname;
 const socketPort = window.location.port;
-let ws_url = `http://${socketHostname}:${socketPort}`;
+let ws_url = `ws://${socketHostname}:${socketPort}`;
 window.ws = io.connect(ws_url);
 
 const player =window.video_player = new Player({
@@ -30,8 +30,8 @@ window.ws.on('error', () => {
 window.ws.on('video_nal', function (message) {
     let unit8_data = new Uint8Array(message)
     let data_size = unit8_data.length
-    console.log("video_nal data size = "+data_size)
-    player.decode(unit8_data);
+    player.decode(unit8_data)
+    console.log("video_nal data size = "+data_size, ", nal="+unit8_data.toString());
 });
 
 window.ws.onclose = () => {
