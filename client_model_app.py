@@ -1,8 +1,5 @@
-import json
 import logging
 import struct
-from asyncio import StreamReader, StreamWriter
-
 from flask import Flask, render_template, request, send_file
 from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS, cross_origin
@@ -18,6 +15,12 @@ logging.basicConfig(format='%(asctime)s.%(msecs)s:%(name)s:%(thread)d:%(levelnam
                     level=logging.INFO)
 h264_sps_nal = bytes()
 h264_pps_nal = bytes()
+
+"""
+adb push scrcpy-server /data/local/tmp/scrcpy-server-manual.jar
+adb forward tcp:10037 localabstract:scrcpy
+adb shell CLASSPATH=/data/local/tmp/scrcpy-server-manual.jar app_process / com.genymobile.scrcpy.Server 2.1.1 tunnel_forward=true audio=false control=false video_codec=h264 cleanup=false send_device_meta=false send_frame_meta=true send_dummy_byte=false send_codec_meta=false max_size=720 video_codec_options=profile=1,level=2 power_on=true
+"""
 
 
 @app.route('/')
@@ -41,7 +44,7 @@ def handle_stream_in(message):
 async def stream_client():
     global h264_sps_nal, h264_pps_nal
     host = "127.0.0.1"
-    port = 10031
+    port = 10038
     timeout = 10
     connect_count = 0
     while True:

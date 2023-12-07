@@ -6,7 +6,7 @@ window.ws = io.connect(ws_url);
 const player =window.video_player = new Player({
         useWorker: true,
         wbgl: 'auto',
-        size: { width: 400, height: 400 },
+        size: { width: 100, height: 100 },
         workerFile: "/static/Decoder.js",
         preserveDrawingBuffer: true});
 
