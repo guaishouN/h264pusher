@@ -24,7 +24,7 @@ adb shell CLASSPATH=/data/local/tmp/scrcpy-server-manual.jar app_process / com.g
 
 
 @app.route('/')
-def index():  # put application's code here
+def index():
     return render_template('index.html')
 
 
@@ -84,7 +84,9 @@ async def stream_client():
         print(f"stream_client error!!!!!!!!!!!!!!! {e}")
     finally:
         writer.close()
+        reader.close()
         await writer.wait_closed()
+        await reader.wait_closed()
         await stream_client()
 
 
